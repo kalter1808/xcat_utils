@@ -125,11 +125,14 @@ func xdshMain(args []string) int {
 	_ = opts.bypass
 
 	// Resolve user: -l or current user (client sets DSH_TO_USERID).
-	// A "user@noderange" prefix on the noderange overrides both (analogous
-	// to ssh/scp target syntax; the plain xCAT xdsh uses -l only).
+	// A "user@noderange" prefix on the noderange is supported like ssh/scp
+	// target syntax (the plain xCAT xdsh uses -l only). Since '@' is also
+	// the noderange intersection operator, disambiguate: a username-like
+	// prefix (letters/digits/_/-/., no range syntax) before a single '@'
+	// is treated as a user; anything else stays noderange intersection.
 	user := opts.user
 	nrExpr := noderangeArg
-	if at := strings.LastIndex(nrExpr, "@"); at > 0 && !strings.ContainsAny(nrExpr[at:], "[(,") {
+	if at := strings.LastIndex(nrExpr, "@"); at > 0 && isUserName(nrExpr[:at]) {
 		if user == "" {
 			user = nrExpr[:at]
 		}
@@ -231,6 +234,24 @@ func currentUser() string {
 		return strings.TrimSpace(string(out))
 	}
 	return ""
+}
+
+// isUserName reports whether s looks like a login name (user@noderange
+// syntax) rather than noderange atoms: no commas, brackets, parens,
+// slashes or '@' (which would mean intersection/range syntax).
+func isUserName(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+		case r == '_' || r == '-' || r == '.':
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // sshDefaultPath mirrors the original's /usr/bin/ssh default while staying
