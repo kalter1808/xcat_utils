@@ -17,7 +17,6 @@
           inherit version src;
           subPackages = [ "cmd/${mainpkg}" ];
           vendorHash = null;
-          CGO_ENABLED = 0;
           meta = with pkgs.lib; {
             description = "${name} - standalone port of xCAT ${name} (local noderange expansion, no xcatd)";
             license = licenses.epl10;
