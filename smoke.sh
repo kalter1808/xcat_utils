@@ -81,9 +81,19 @@ check "xdsh fanout 8 nodes" "$expected8" "$out"
 out=$($X node1 -B -r /tmp/opencode/fakessh "echo B" 2>&1)
 check "xdsh -B bypass accepted" "node1: B" "$out"
 
-# user@noderange target syntax
-out=$($X root@node1 -r /tmp/opencode/fakessh "echo hi" 2>&1 | grep TARGET)
+# user@noderange target syntax: fake ssh prints its target argument
+# and emits the DSH_TARGET_RC marker so xdsh treats the run as successful
+cat > /tmp/opencode/fakessh_t <<'EOSSH'
+#!/usr/bin/env bash
+args=("$@")
+echo "TARGET=${args[${#args[@]}-2]}"
+echo ":DSH_TARGET_RC=0:"
+EOSSH
+chmod +x /tmp/opencode/fakessh_t
+out=$($X root@node1 -r /tmp/opencode/fakessh_t "echo hi" 2>&1)
 check "xdsh user@ target" "node1: TARGET=root@node1" "$out"
+out=$($X node1 -r /tmp/opencode/fakessh_t "echo hi" 2>&1)
+check "xdsh plain target" "node1: TARGET=node1" "$out"
 
 start=$(date +%s)
 out=$($X node[1-3] -t 1 -r /tmp/opencode/fakessh "sleep 30" >/dev/null 2>&1; echo $?)
