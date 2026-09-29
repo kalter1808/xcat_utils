@@ -9,7 +9,7 @@ import (
 
 var (
 	hostUpRe     = regexp.MustCompile(`Host (.*) \(.*\) appears to be up`)
-	nmapReportRe = regexp.MustCompile(`Nmap scan report for ([^ ]*) `)
+	nmapReportRe = regexp.MustCompile(`Nmap scan report for ([^ ]+?)(?:[ (].*)?$`)
 )
 
 // regexpStripHF strips a trailing "-hf<n>" suffix (pping line 141).

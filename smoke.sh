@@ -47,7 +47,7 @@ exec /bin/sh -c "$cmd"
 EOSSH
 chmod +x /tmp/opencode/fakessh
 
-out=$($X node[1-2] -r /tmp/opencode/fakessh "echo hello" 2>&1)
+out=$($X node[1-2] -r /tmp/opencode/fakessh "echo hello" 2>&1 | sort)
 expected=$'node1: hello\nnode2: hello'
 check "xdsh echo via fake ssh" "$expected" "$out"
 

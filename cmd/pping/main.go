@@ -157,27 +157,36 @@ func nmapPping(nodes []string) {
 	var node string
 	for sc.Scan() {
 		line := sc.Text()
-		if m := hostUpRe.FindStringSubmatch(line); m != nil {
-			node = m[1]
-			node = mapToRequested(node, dead)
-			if node != "" {
-				delete(dead, node)
-				fmt.Printf("%s: ping\n", node)
+		switch {
+		case strings.Contains(line, "appears to be up"): // old nmap: "Host x (...) appears to be up"
+			if m := hostUpRe.FindStringSubmatch(line); m != nil {
+				node = m[1]
+				printUp(node, dead)
 			}
-		} else if m := nmapReportRe.FindStringSubmatch(line); m != nil {
-			node = m[1]
-		} else if strings.Contains(line, "Host is up.") {
-			node = mapToRequested(node, dead)
-			if node != "" {
-				delete(dead, node)
-				fmt.Printf("%s: ping\n", node)
+		case strings.Contains(line, "Nmap scan report for"): // modern nmap: name on this line...
+			if m := nmapReportRe.FindStringSubmatch(line); m != nil {
+				node = m[1]
 			}
+		case strings.Contains(line, "Host is up"): // ...and status on the next
+			printUp(node, dead)
 		}
 	}
 	cmd.Wait()
 	for _, n := range sortedKeys(dead) {
 		fmt.Printf("%s: noping\n", n)
 	}
+}
+
+// printUp reports "<node>: ping", mapping a resolved nmap name back to the
+// requested node name (nmap may print FQDNs while the user asked for short
+// names — pping lines 215-224).
+func printUp(node string, dead map[string]bool) {
+	if node == "" {
+		return
+	}
+	node = mapToRequested(node, dead)
+	delete(dead, node)
+	fmt.Printf("%s: ping\n", node)
 }
 
 // mapToRequested maps a resolved nmap hostname back to the requested node

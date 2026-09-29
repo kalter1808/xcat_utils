@@ -145,10 +145,11 @@ func xdshMain(args []string) int {
 	command := strings.TrimSpace(strings.Join(cmdArgs, " "))
 
 	// Environment variable fallback chains (config_dsh, DSHCLI.pm:2439-2442,
-	// 2501, 2535, 2670-2672).
+	// 2501, 2535, 2670-2672). The original hardcodes /usr/bin/ssh (RHEL);
+	// we resolve "ssh" via PATH first and fall back to /usr/bin/ssh.
 	remoteShell := opts.nodeRsh
 	if remoteShell == "" {
-		remoteShell = firstNonEmpty(os.Getenv("DSH_NODE_RSH"), os.Getenv("DSH_REMOTE_CMD"), "/usr/bin/ssh")
+		remoteShell = firstNonEmpty(os.Getenv("DSH_NODE_RSH"), os.Getenv("DSH_REMOTE_CMD"), sshDefaultPath())
 	}
 	nodeOpts := opts.nodeOptions
 	if nodeOpts == "" {
@@ -221,6 +222,24 @@ func currentUser() string {
 		return strings.TrimSpace(string(out))
 	}
 	return ""
+}
+
+// sshDefaultPath mirrors the original's /usr/bin/ssh default while staying
+// portable: prefer the ssh found in PATH (NixOS has no /usr/bin), fall back
+// to the hardcoded location (SSH.pm: SSH_CMD).
+func sshDefaultPath() string {
+	if p, err := exec.LookPath("ssh"); err == nil {
+		return p
+	}
+	return "/usr/bin/ssh"
+}
+
+// scpDefaultPath is the same for /usr/bin/scp (SSH.pm: SCP_CMD).
+func scpDefaultPath() string {
+	if p, err := exec.LookPath("scp"); err == nil {
+		return p
+	}
+	return "/usr/bin/scp"
 }
 
 // checkInvalidExports warns about unsupported dsh environment variables,
@@ -688,7 +707,7 @@ func (r *runner) copyScriptTo(node, src, dst string) error {
 		args = append(args, "-B")
 	}
 	args = append(args, src, target+":"+dst)
-	return exec.Command("/usr/bin/scp", args...).Run()
+	return exec.Command(scpDefaultPath(), args...).Run()
 }
 
 func regexpMustCompile(s string) *regexpT { return compileRe(s) }
