@@ -125,7 +125,16 @@ func xdshMain(args []string) int {
 	_ = opts.bypass
 
 	// Resolve user: -l or current user (client sets DSH_TO_USERID).
+	// A "user@noderange" prefix on the noderange overrides both (analogous
+	// to ssh/scp target syntax; the plain xCAT xdsh uses -l only).
 	user := opts.user
+	nrExpr := noderangeArg
+	if at := strings.LastIndex(nrExpr, "@"); at > 0 && !strings.ContainsAny(nrExpr[at:], "[(,") {
+		if user == "" {
+			user = nrExpr[:at]
+		}
+		nrExpr = nrExpr[at+1:]
+	}
 	if user == "" {
 		if env := os.Getenv("DSH_TO_USERID"); env != "" {
 			user = env
@@ -134,7 +143,7 @@ func xdshMain(args []string) int {
 		}
 	}
 
-	nodes, missed := noderange.Expand(noderangeArg)
+	nodes, missed := noderange.Expand(nrExpr)
 	if len(missed) > 0 {
 		fmt.Printf("Invalid nodes in noderange:%s\n", strings.Join(missed, ","))
 	}
