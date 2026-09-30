@@ -34,7 +34,7 @@ import (
 )
 
 const xdshUsage = " xdsh -h \n xdsh -q \n xdsh -V \n" +
-	"xdsh  <noderange> [-K] [-l logonuserid]\n" +
+	"xdsh  <noderange> [-k|--ignore-host-key] [-K] [-l logonuserid]\n" +
 	"      [-B bypass ] [-c] [-e] [-E environment_file]\n" +
 	"      [--devicetype type_of_device] [-f fanout]\n" +
 	"      [-l user_ID] [-L]  [-m] [-o options][-q] [-Q] [-r remote_shell]\n" +
@@ -49,32 +49,33 @@ func main() {
 }
 
 type xdshOptions struct {
-	execute      string
-	fanout       int
-	help         bool
-	user         string
-	monitor      bool
-	nodeOptions  string
-	showConfig   bool
-	nodeRsh      string
-	streaming    bool
-	timeout      int // seconds; 0 = none
-	verify       bool
-	exitStatus   bool
-	bypass       bool
-	environment  string
-	ignoreSig    string
-	noLocale     bool
-	silent       bool
-	syntax       string
-	trace        bool
-	version      bool
-	devicetype   string
-	commandName  string
-	sudo         bool
-	nodestatus   bool
-	ignoreEnv    string
-	rootsEnv     []string
+	execute       string
+	fanout        int
+	help          bool
+	user          string
+	monitor       bool
+	nodeOptions   string
+	showConfig    bool
+	nodeRsh       string
+	streaming     bool
+	timeout       int // seconds; 0 = none
+	verify        bool
+	exitStatus    bool
+	bypass        bool
+	environment   string
+	ignoreSig     string
+	noLocale      bool
+	silent        bool
+	syntax        string
+	trace         bool
+	version       bool
+	devicetype    string
+	commandName   string
+	sudo          bool
+	nodestatus    bool
+	ignoreEnv     string
+	rootsEnv      []string
+	ignoreHostKey bool
 }
 
 func xdshMain(args []string) int {
@@ -109,6 +110,11 @@ func xdshMain(args []string) int {
 	if opts.showConfig {
 		showDshConfig()
 		return 0
+	}
+
+	if noderangeArg == "" && len(cmdArgs) > 0 {
+		noderangeArg = cmdArgs[0]
+		cmdArgs = cmdArgs[1:]
 	}
 
 	if noderangeArg == "" {
@@ -190,29 +196,39 @@ func xdshMain(args []string) int {
 		fanout = 1
 	}
 
+	ignoreHostKey := opts.ignoreHostKey
+	if !ignoreHostKey {
+		if v := os.Getenv("XDSH_IGNORE_HOST_KEY"); v != "" {
+			ignoreHostKey = isTruthy(v)
+		} else if v := os.Getenv("DSH_IGNORE_HOST_KEY"); v != "" {
+			ignoreHostKey = isTruthy(v)
+		}
+	}
+
 	preCommand := buildPreCommand(opts)
 	postCommand := buildPostCommand(opts)
 
 	return executeDsh(&dshConfig{
-		nodes:       nodes,
-		command:     command,
-		user:        user,
-		remoteShell: remoteShell,
-		nodeOpts:    nodeOpts,
-		fanout:      fanout,
-		timeout:     timeout,
-		streaming:   opts.streaming,
-		silent:      opts.silent,
-		monitor:     opts.monitor,
-		trace:       opts.trace,
-		exitStatus:  opts.exitStatus,
-		nodestatus:  opts.nodestatus,
-		verify:      opts.verify,
-		sudo:        opts.sudo,
-		execute:     opts.execute,
-		preCommand:  preCommand,
-		postCommand: postCommand,
-		openSSH:     isOpenSSH(remoteShell),
+		nodes:         nodes,
+		command:       command,
+		user:          user,
+		remoteShell:   remoteShell,
+		nodeOpts:      nodeOpts,
+		fanout:        fanout,
+		timeout:       timeout,
+		streaming:     opts.streaming,
+		silent:        opts.silent,
+		monitor:       opts.monitor,
+		trace:         opts.trace,
+		exitStatus:    opts.exitStatus,
+		nodestatus:    opts.nodestatus,
+		verify:        opts.verify,
+		sudo:          opts.sudo,
+		execute:       opts.execute,
+		preCommand:    preCommand,
+		postCommand:   postCommand,
+		openSSH:       isOpenSSH(remoteShell),
+		ignoreHostKey: ignoreHostKey,
 	})
 }
 
@@ -333,25 +349,26 @@ func buildPostCommand(opts *xdshOptions) string {
 
 // dshConfig is the fully resolved dsh configuration (options hash in DSHCLI).
 type dshConfig struct {
-	nodes       []string
-	command     string
-	user        string
-	remoteShell string
-	nodeOpts    string
-	fanout      int
-	timeout     int
-	streaming   bool
-	silent      bool
-	monitor     bool
-	trace       bool
-	exitStatus  bool
-	nodestatus  bool
-	verify      bool
-	sudo        bool
-	execute     string // -e script path
-	preCommand  string
-	postCommand string
-	openSSH     bool
+	nodes         []string
+	command       string
+	user          string
+	remoteShell   string
+	nodeOpts      string
+	fanout        int
+	timeout       int
+	streaming     bool
+	silent        bool
+	monitor       bool
+	trace         bool
+	exitStatus    bool
+	nodestatus    bool
+	verify        bool
+	sudo          bool
+	execute       string // -e script path
+	preCommand    string
+	postCommand   string
+	openSSH       bool
+	ignoreHostKey bool
 }
 
 // targetResult captures a finished target.
@@ -630,6 +647,14 @@ func (r *runner) runTarget(node string) *targetResult {
 			args = append(args, "-x")
 		}
 	}
+	if cfg.ignoreHostKey {
+		args = append(args,
+			"-o", "StrictHostKeyChecking=no",
+			"-o", "UserKnownHostsFile=/dev/null",
+			"-o", "GlobalKnownHostsFile=/dev/null",
+			"-o", "LogLevel=ERROR",
+		)
+	}
 	target := node
 	if cfg.user != "" && cfg.user != currentUser() {
 		target = cfg.user + "@" + node
@@ -733,8 +758,19 @@ func (r *runner) copyScriptTo(node, src, dst string) error {
 		target = r.cfg.user + "@" + node
 	}
 	args := []string{}
+	if r.cfg.nodeOpts != "" {
+		args = append(args, strings.Fields(r.cfg.nodeOpts)...)
+	}
 	if r.cfg.openSSH {
 		args = append(args, "-B")
+	}
+	if r.cfg.ignoreHostKey {
+		args = append(args,
+			"-o", "StrictHostKeyChecking=no",
+			"-o", "UserKnownHostsFile=/dev/null",
+			"-o", "GlobalKnownHostsFile=/dev/null",
+			"-o", "LogLevel=ERROR",
+		)
 	}
 	args = append(args, src, target+":"+dst)
 	return exec.Command(scpDefaultPath(), args...).Run()

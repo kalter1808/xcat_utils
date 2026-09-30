@@ -121,6 +121,12 @@ func parseXdshArgs(args []string, opts *xdshOptions) ([]string, error) {
 				v, _ := needVal()
 				_ = v
 			}
+		case a == "-k" || a == "--ignore-host-key" || a == "--ignore-hostkey" || a == "--insecure" || a == "--no-host-key-check":
+			if hasVal {
+				opts.ignoreHostKey = isTruthy(val)
+			} else {
+				opts.ignoreHostKey = true
+			}
 		case a == "--devicetype":
 			v, err := needVal(); if err != nil { return nil, err }; opts.devicetype = v
 		case a == "--command-name" || a == "--commandName":
@@ -138,6 +144,11 @@ func parseXdshArgs(args []string, opts *xdshOptions) ([]string, error) {
 		}
 	}
 	return rest, nil
+}
+
+func isTruthy(s string) bool {
+	s = strings.ToLower(strings.TrimSpace(s))
+	return s == "1" || s == "true" || s == "yes" || s == "y" || s == "on"
 }
 
 func atoi(s string) (int, error) {

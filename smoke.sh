@@ -103,4 +103,40 @@ if [ "$elapsed" -lt 10 ]; then echo "PASS: xdsh timeout kills ($elapsed s, rc=$o
 out=$($X '192.168.100.[1-3]' -r /tmp/opencode/fakessh 'echo $NODE' 2>&1 | sort | tr '\n' ' ')
 check "xdsh ip noderange" "192.168.100.1: 192.168.100.1 192.168.100.2: 192.168.100.2 192.168.100.3: 192.168.100.3 " "$out"
 
+# Host key verification ignore tests
+cat > /tmp/opencode/fakessh_k <<'EOSSH'
+#!/usr/bin/env bash
+has_hostkey=0
+for arg in "$@"; do
+  if [ "$arg" = "StrictHostKeyChecking=no" ]; then
+    has_hostkey=1
+  fi
+done
+if [ "$has_hostkey" -eq 1 ]; then
+  echo "HOSTKEY_IGNORED"
+else
+  echo "HOSTKEY_CHECKED"
+fi
+echo ":DSH_TARGET_RC=0:"
+EOSSH
+chmod +x /tmp/opencode/fakessh_k
+
+out=$($X node1 -k -r /tmp/opencode/fakessh_k "echo hi" 2>&1 | grep "HOSTKEY_")
+check "xdsh -k ignores host key" "node1: HOSTKEY_IGNORED" "$out"
+
+out=$($X -k node1 -r /tmp/opencode/fakessh_k "echo hi" 2>&1 | grep "HOSTKEY_")
+check "xdsh -k before noderange" "node1: HOSTKEY_IGNORED" "$out"
+
+out=$($X node1 --ignore-host-key -r /tmp/opencode/fakessh_k "echo hi" 2>&1 | grep "HOSTKEY_")
+check "xdsh --ignore-host-key" "node1: HOSTKEY_IGNORED" "$out"
+
+out=$(DSH_IGNORE_HOST_KEY=1 $X node1 -r /tmp/opencode/fakessh_k "echo hi" 2>&1 | grep "HOSTKEY_")
+check "xdsh DSH_IGNORE_HOST_KEY env" "node1: HOSTKEY_IGNORED" "$out"
+
+out=$(XDSH_IGNORE_HOST_KEY=1 $X node1 -r /tmp/opencode/fakessh_k "echo hi" 2>&1 | grep "HOSTKEY_")
+check "xdsh XDSH_IGNORE_HOST_KEY env" "node1: HOSTKEY_IGNORED" "$out"
+
+out=$($X node1 -r /tmp/opencode/fakessh_k "echo hi" 2>&1 | grep "HOSTKEY_")
+check "xdsh default keeps host key check" "node1: HOSTKEY_CHECKED" "$out"
+
 exit $fail

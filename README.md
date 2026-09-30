@@ -49,6 +49,10 @@ nix develop                # dev-shell с go, fping, nmap, openssh
 - `-l user` / `DSH_TO_USERID`; `-r shell` / `DSH_NODE_RSH`;
   `-o opts` / `DSH_NODE_OPTS` (проверка: путь существует, исполняем,
   не rsync)
+- `-k` / `--ignore-host-key` / `XDSH_IGNORE_HOST_KEY=1` (`DSH_IGNORE_HOST_KEY=1`) —
+  игнорирование проверки host key (`StrictHostKeyChecking=no`,
+  `UserKnownHostsFile=/dev/null`, `GlobalKnownHostsFile=/dev/null`,
+  `LogLevel=ERROR` для OpenSSH/SCP)
 - `-z` — строка `Remote_command_rc = N`; `-Q` — тишина; `--nodestatus` —
   `Remote_command_successful/failed, error_code=N`; `-m` — прогресс
   `dsh> ...`; `-e script` — scp скрипта в /tmp и запуск; `--sudo`;
@@ -75,7 +79,7 @@ nix develop                # dev-shell с go, fping, nmap, openssh
 ## Тесты
 
 ```sh
-go test ./...     # unit-тесты noderange
+go test ./...     # unit-тесты noderange и xdsh
 bash smoke.sh     # smoke pping/xdsh (fake ssh для детерминированных проверок)
 nix flake check
 ```
