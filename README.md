@@ -84,6 +84,14 @@ bash smoke.sh     # smoke pping/xdsh (fake ssh для детерминирова
 nix flake check
 ```
 
+## Документация (man-страницы)
+
+В проект включены man-страницы:
+- `man/man1/pping.1` (`man -l man/man1/pping.1`)
+- `man/man1/xdsh.1` (`man -l man/man1/xdsh.1`)
+
+При установке через Nix (`nix shell`, `nix profile install`) man-страницы подключаются автоматически в `share/man/man1/`.
+
 ## Ограничения порта
 
 - нет xcatd/базы: группы узлов из `nodelist`, dyn-группы, `site.excludenodes`

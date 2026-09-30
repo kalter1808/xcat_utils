@@ -1,0 +1,110 @@
+.TH PPING 1 "September 2026" "xcat-ports 0.1.0" "User Commands"
+.SH NAME
+pping \- parallel ping utility for cluster nodes
+.SH SYNOPSIS
+.B pping
+[\fB\-i\fR|\fB\-\-interface\fR \fIinterfaces\fR]
+[\fB\-f\fR|\fB\-\-use_fping\fR]
+[\fB\-X\fR|\fB\-\-noexpand\fR]
+[\fB\-h\fR|\fB\-\-help\fR]
+[\fB\-v\fR|\fB\-\-version\fR]
+\fInoderange\fR
+.SH DESCRIPTION
+.B pping
+is a standalone port of xCAT's \fBpping\fR utility. It expands a noderange
+locally (without requiring \fBxcatd\fR or an xCAT database) and tests the
+network reachability of multiple nodes in parallel.
+.PP
+By default, \fBpping\fR uses \fBnmap\fR(1) if available on the system
+(invoking: \fBnmap \-PE \-\-system\-dns \-\-send\-ip \-sP \-\-unprivileged \-PA80,443,22\fR).
+If \fBnmap\fR is not found or when \fB\-f\fR is specified, it falls back to
+\fBfping\fR(1).
+.PP
+Output is printed line by line:
+.IP
+.nf
+\fInode\fR: ping
+\fInode\fR: noping
+.fi
+.PP
+Responsive nodes are reported in discovery order as responses arrive. Unreachable
+nodes are printed sorted at the end.
+.SH OPTIONS
+.TP
+\fB\-f\fR, \fB\-\-use_fping\fR
+Force using \fBfping\fR(1) instead of \fBnmap\fR(1).
+.TP
+\fB\-i\fR, \fB\-\-interface\fR \fIinterfaces\fR
+Probe specific network interface suffixes. \fIinterfaces\fR is a comma-separated
+list of interface names (e.g. \fBeth0,ib0\fR). The interface name is appended as
+a hyphenated suffix to each node name (e.g. \fBnode1\-eth0\fR). Any existing
+\fB\-hf\fR\fIN\fR suffix on the node name is stripped before appending.
+.TP
+\fB\-X\fR, \fB\-\-noexpand\fR
+Do not expand the noderange; treat the argument as an already expanded,
+comma-separated list of hosts.
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print usage information and exit.
+.TP
+\fB\-v\fR, \fB\-\-version\fR
+Print version information and exit.
+.SH NODERANGE SYNTAX
+The \fInoderange\fR expression supports full local xCAT noderange syntax:
+.TP
+.B node1,node2,node3
+Explicit list of nodes (comma-separated).
+.TP
+.B node[1-100], node[001-200]
+Bracket ranges, preserving zero-padding.
+.TP
+.B f[1-2]n[1-3]
+Multiple bracket groups in a single expression.
+.TP
+.B node1:node200, rack1-rack4
+Hyphen/colon range between two node names differing in exactly one numeric field.
+.TP
+.B node10+3
+Numeric increment shorthand (expands to \fBnode10,node11,node12,node13\fR).
+.TP
+.B 10-12
+Numbers without prefix default to prefix \fBnode\fR (configurable via \fBXCAT_NODE_PREFIX\fR).
+.TP
+.B 192.168.0.[1-50]
+IPv4 bracket ranges.
+.TP
+.B ,-node3, -(node2,node4)
+Exclusion operators. Applied after inclusions.
+.TP
+.B group1@group2
+Intersection operator.
+.TP
+.B ^/path/to/file
+Read node names from a file (one per line or space/colon delimited; '#' comments supported).
+.SH EXIT STATUS
+.TP
+.B 0
+Success (all targets were pingable).
+.TP
+.B 1
+One or more nodes were unreachable, or invalid arguments were provided.
+.SH EXAMPLES
+Ping a numbered sequence of compute nodes:
+.IP
+.B pping node[1-64]
+.PP
+Ping nodes using fping explicitly:
+.IP
+.B pping -f rack1-rack4
+.PP
+Ping secondary interfaces:
+.IP
+.B pping -i eth1,ib0 node[1-10]
+.PP
+Ping an IP range:
+.IP
+.B pping '192.168.100.[1-50]'
+.SH SEE ALSO
+.BR xdsh (1),
+.BR fping (1),
+.BR nmap (1)

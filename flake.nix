@@ -17,6 +17,11 @@
           inherit version src;
           subPackages = [ "cmd/${mainpkg}" ];
           vendorHash = null;
+          postInstall = ''
+            if [ -f "man/man1/${name}.1" ]; then
+              install -Dm644 "man/man1/${name}.1" "$out/share/man/man1/${name}.1"
+            fi
+          '';
           meta = with pkgs.lib; {
             description = "${name} - standalone port of xCAT ${name} (local noderange expansion, no xcatd)";
             license = licenses.epl10;

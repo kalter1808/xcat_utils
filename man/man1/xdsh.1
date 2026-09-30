@@ -1,0 +1,198 @@
+.TH XDSH 1 "September 2026" "xcat-ports 0.1.0" "User Commands"
+.SH NAME
+xdsh \- parallel distributed shell execution for cluster nodes
+.SH SYNOPSIS
+.B xdsh
+\fInoderange\fR
+[\fB\-k\fR|\fB\-\-ignore\-host\-key\fR]
+[\fB\-l\fR \fIuser\fR]
+[\fB\-f\fR \fIfanout\fR]
+[\fB\-t\fR \fItimeout\fR]
+[\fB\-s\fR]
+[\fB\-Q\fR]
+[\fB\-z\fR]
+[\fB\-\-nodestatus\fR]
+[\fB\-m\fR]
+[\fB\-T\fR]
+[\fB\-r\fR \fIshell\fR]
+[\fB\-o\fR \fIoptions\fR]
+[\fB\-e\fR \fIscript\fR]
+[\fB\-\-sudo\fR]
+[\fB\-L\fR]
+[\fB\-B\fR]
+[\fB\-h\fR]
+[\fB\-q\fR]
+[\fB\-V\fR]
+\fIcommand\fR
+.SH DESCRIPTION
+.B xdsh
+is a standalone port of xCAT's \fBxdsh\fR utility running in bypass mode
+(without requiring the \fBxcatd\fR daemon or an xCAT database). It resolves
+the target \fInoderange\fR locally and executes commands in parallel across all
+matching nodes using OpenSSH \fBssh\fR(1) (or another remote shell).
+.PP
+Each line of stdout and stderr is prefixed with the corresponding node name:
+.IP
+.nf
+\fInode\fR: \fIoutput\fR
+.fi
+.PP
+By default, output is buffered per node (printing stdout first, then stderr)
+and printed in batches sorted by node name. Real-time streaming mode can be
+enabled with \fB\-s\fR.
+.PP
+Remote command return codes are accurately captured via an injected marker
+line (\fB:DSH_TARGET_RC=N:\fR) which is stripped from visible output.
+.SH OPTIONS
+.TP
+\fB\-k\fR, \fB\-\-ignore\-host\-key\fR, \fB\-\-ignore\-hostkey\fR, \fB\-\-insecure\fR, \fB\-\-no\-host\-key\-check\fR
+Disable SSH host key verification. When specified, OpenSSH is invoked with:
+.RS
+.IP \(bu 2
+\fB\-o StrictHostKeyChecking=no\fR (accept unknown host keys automatically)
+.IP \(bu 2
+\fB\-o UserKnownHostsFile=/dev/null\fR (ignore user known_hosts file)
+.IP \(bu 2
+\fB\-o GlobalKnownHostsFile=/dev/null\fR (ignore system known_hosts file)
+.IP \(bu 2
+\fB\-o LogLevel=ERROR\fR (suppress host key addition warnings on stderr)
+.RE
+.IP
+This option also applies to remote script copy via \fBscp\fR(1) when \fB\-e\fR is used.
+Can also be enabled globally via the \fBXDSH_IGNORE_HOST_KEY\fR or \fBDSH_IGNORE_HOST_KEY\fR
+environment variables.
+.TP
+\fB\-f\fR, \fB\-\-fanout\fR \fIfanout\fR
+Maximum number of concurrent remote processes to spawn simultaneously.
+Default is \fB64\fR (configurable via \fBDSH_FANOUT\fR).
+.TP
+\fB\-l\fR, \fB\-\-user\fR \fIuser\fR
+Remote login user ID. Defaults to current user (or \fBDSH_TO_USERID\fR).
+A \fIuser\fR@\fInoderange\fR prefix on the noderange argument is also supported.
+.TP
+\fB\-t\fR, \fB\-\-timeout\fR \fIseconds\fR
+Execution inactivity timeout in seconds (configurable via \fBDSH_TIMEOUT\fR).
+If no output is received from in-flight children within the timeout period,
+active child processes are terminated with \fBSIGINT\fR.
+.TP
+\fB\-s\fR, \fB\-\-stream\fR
+Stream stdout and stderr lines immediately as they arrive from each node rather
+than buffering per node.
+.TP
+\fB\-Q\fR, \fB\-\-silent\fR
+Silent mode. Suppress standard command output from the remote nodes.
+.TP
+\fB\-z\fR, \fB\-\-exit\-status\fR
+Append a summary line \fBRemote_command_rc = \fIN\fR indicating the exit status
+of the remote command for each node.
+.TP
+\fB\-\-nodestatus\fR
+Output a status line for each node: \fB\fInode\fR: Remote_command_successful\fR or
+\fB\fInode\fR: Remote_command_failed, error_code=\fIN\fR.
+.TP
+\fB\-m\fR, \fB\-\-monitor\fR
+Display progress messages as commands start and finish on each node.
+.TP
+\fB\-T\fR, \fB\-\-trace\fR
+Print each command invocation before running it.
+.TP
+\fB\-r\fR, \fB\-\-node\-rsh\fR \fIshell\fR
+Path to the remote shell binary. Defaults to \fBssh\fR found in \fBPATH\fR,
+or \fB/usr/bin/ssh\fR (configurable via \fBDSH_NODE_RSH\fR or \fBDSH_REMOTE_CMD\fR).
+.TP
+\fB\-o\fR, \fB\-\-node\-options\fR \fIoptions\fR
+Additional options passed directly to the remote shell command (configurable via
+\fBDSH_NODE_OPTS\fR or \fBDSH_REMOTE_OPTS\fR).
+.TP
+\fB\-e\fR, \fB\-\-execute\fR \fIscript\fR
+Copy the local script file to \fB/tmp\fR on each target node via \fBscp\fR(1)
+and execute it remotely, removing the temporary file afterward.
+.TP
+\fB\-\-sudo\fR
+Prepend \fBsudo\fR to the remote command execution.
+.TP
+\fB\-L\fR, \fB\-\-no\-locale\fR
+Do not prepend local locale environment variables to the remote command.
+.TP
+\fB\-B\fR, \fB\-\-bypass\fR
+Bypass mode (accepted for compatibility; this standalone port always runs in bypass mode).
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Display command usage and exit.
+.TP
+\fB\-q\fR, \fB\-\-show\-config\fR
+Display configuration parameters and exit.
+.TP
+\fB\-V\fR, \fB\-\-version\fR
+Display version information and exit.
+.TP
+\fB\-X\fR, \fB\-\-noexpand\fR
+Do not expand the noderange argument (accepted for compatibility).
+.SH ENVIRONMENT
+.TP
+.B XDSH_IGNORE_HOST_KEY, DSH_IGNORE_HOST_KEY
+When set to \fB1\fR, \fBtrue\fR, \fByes\fR, or \fBon\fR, enables \fB\-k\fR host key
+ignoring by default.
+.TP
+.B DSH_FANOUT
+Default fanout value (concurrency level). Defaults to \fB64\fR.
+.TP
+.B DSH_TIMEOUT
+Default command timeout in seconds.
+.TP
+.B DSH_TO_USERID
+Default remote user ID if not specified via \fB\-l\fR.
+.TP
+.B DSH_NODE_RSH, DSH_REMOTE_CMD
+Default remote shell executable.
+.TP
+.B DSH_NODE_OPTS, DSH_REMOTE_OPTS
+Default options to pass to the remote shell.
+.TP
+.B DSH_PATH
+Path string exported as \fBPATH\fR in the pre-command on remote nodes.
+.SH NODERANGE SYNTAX
+Full xCAT noderange syntax is supported:
+.TP
+.B node1,node2
+Comma-separated hostnames. Output is deduplicated and sorted.
+.TP
+.B node[1-100], node[001-200]
+Numeric bracket ranges, preserving leading zeros.
+.TP
+.B rack1-rack4, node1:node200
+Hyphen or colon ranges between hostnames.
+.TP
+.B 10.40.170.[71-80]
+IPv4 bracket ranges.
+.TP
+.B ,-node3, -(node2,node4)
+Exclusions (always applied last).
+.TP
+.B group1@group2
+Intersection operator.
+.TP
+.B ^/path/to/file
+Read hosts from a file.
+.SH EXIT STATUS
+The exit status is equal to the number of failed target nodes (0 if all targets succeeded).
+.SH EXAMPLES
+Run uptime on a range of compute nodes:
+.IP
+.B xdsh node[1-20] uptime
+.PP
+Ignore SSH host key verification on newly installed nodes:
+.IP
+.B xdsh -k 10.40.170.[71-80] uptime
+.PP
+Execute a command as another user with sudo and stream output:
+.IP
+.B xdsh admin@node[1-4] --sudo -s "systemctl restart myapp"
+.PP
+Copy and execute a local script across the cluster with fanout of 16:
+.IP
+.B xdsh node[1-128] -f 16 -e ./update_configs.sh
+.SH SEE ALSO
+.BR pping (1),
+.BR ssh (1),
+.BR scp (1)
