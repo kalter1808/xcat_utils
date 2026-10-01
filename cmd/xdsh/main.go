@@ -58,7 +58,7 @@ type xdshOptions struct {
 	showConfig    bool
 	nodeRsh       string
 	streaming     bool
-	timeout       int // seconds; 0 = none
+	timeout       int // seconds; default 5; 0 = unlimited
 	verify        bool
 	exitStatus    bool
 	bypass        bool
@@ -79,7 +79,9 @@ type xdshOptions struct {
 }
 
 func xdshMain(args []string) int {
-	opts := &xdshOptions{}
+	opts := &xdshOptions{
+		timeout: -1,
+	}
 	var noderangeArg string
 	var cmdArgs []string
 
@@ -184,14 +186,7 @@ func xdshMain(args []string) int {
 	if fanout == 0 {
 		fanout = 64
 	}
-	timeout := opts.timeout
-	if timeout == 0 {
-		if t := os.Getenv("DSH_TIMEOUT"); t != "" {
-			if n, err := strconv.Atoi(t); err == nil {
-				timeout = n
-			}
-		}
-	}
+	timeout := resolveTimeout(opts.timeout, os.Getenv("DSH_TIMEOUT"))
 	if fanout < 1 {
 		fanout = 1
 	}
@@ -230,6 +225,27 @@ func xdshMain(args []string) int {
 		openSSH:       isOpenSSH(remoteShell),
 		ignoreHostKey: ignoreHostKey,
 	})
+}
+
+func resolveTimeout(cliTimeout int, envTimeout string) int {
+	if cliTimeout >= 0 {
+		return cliTimeout
+	}
+	if envTimeout != "" {
+		if n, err := strconv.Atoi(envTimeout); err == nil && n >= 0 {
+			return n
+		}
+	}
+	return 5
+}
+
+func addFailed(failed *[]string, node string) {
+	for _, n := range *failed {
+		if n == node {
+			return
+		}
+	}
+	*failed = append(*failed, node)
 }
 
 func firstNonEmpty(vals ...string) string {
@@ -466,7 +482,9 @@ func executeDsh(cfg *dshConfig) int {
 				r.mu.Unlock()
 				sort.Strings(active)
 				fmt.Fprintf(os.Stderr, " %s\n", strings.Join(active, " "))
-				failed = append(failed, active...)
+				for _, n := range active {
+					addFailed(&failed, n)
+				}
 				// The original does NOT cancel still-waiting targets on a
 				// timeout (the `last` is commented out at _execute_dsh:507),
 				// so waiting nodes keep being started.
@@ -574,7 +592,7 @@ func (r *runner) report(res *targetResult, failed *[]string) {
 			fmt.Printf("dsh>  Remote_command_failed %s\n", res.node)
 		}
 		if !interrupted {
-			*failed = append(*failed, res.node)
+			addFailed(failed, res.node)
 		}
 		return
 	}
@@ -585,7 +603,7 @@ func (r *runner) report(res *targetResult, failed *[]string) {
 		if cfg.monitor {
 			fmt.Printf("dsh>  Remote_command_failed %s\n", res.node)
 		}
-		*failed = append(*failed, res.node)
+		addFailed(failed, res.node)
 		return
 	}
 	if !res.rcSeen && !strings.HasSuffix(cfg.command, "&") {
@@ -596,7 +614,7 @@ func (r *runner) report(res *targetResult, failed *[]string) {
 		if cfg.monitor {
 			fmt.Printf("dsh>  Remote_command_failed %s\n", res.node)
 		}
-		*failed = append(*failed, res.node)
+		addFailed(failed, res.node)
 		return
 	}
 	if cfg.nodestatus {

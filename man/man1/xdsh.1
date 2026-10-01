@@ -72,6 +72,7 @@ A \fIuser\fR@\fInoderange\fR prefix on the noderange argument is also supported.
 .TP
 \fB\-t\fR, \fB\-\-timeout\fR \fIseconds\fR
 Execution inactivity timeout in seconds (configurable via \fBDSH_TIMEOUT\fR).
+Default is \fB5\fR seconds. Specify \fB0\fR to disable the timeout.
 If no output is received from in-flight children within the timeout period,
 active child processes are terminated with \fBSIGINT\fR.
 .TP
@@ -138,7 +139,7 @@ ignoring by default.
 Default fanout value (concurrency level). Defaults to \fB64\fR.
 .TP
 .B DSH_TIMEOUT
-Default command timeout in seconds.
+Default command timeout in seconds (defaults to \fB5\fR; \fB0\fR disables timeout).
 .TP
 .B DSH_TO_USERID
 Default remote user ID if not specified via \fB\-l\fR.

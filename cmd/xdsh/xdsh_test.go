@@ -106,3 +106,58 @@ func TestXdshEnvIgnoreHostKey(t *testing.T) {
 		t.Errorf("expected ignoreHostKey=true from XDSH_IGNORE_HOST_KEY")
 	}
 }
+
+func TestResolveTimeout(t *testing.T) {
+	tests := []struct {
+		cli  int
+		env  string
+		want int
+	}{
+		{-1, "", 5},
+		{-1, "10", 10},
+		{-1, "0", 0},
+		{-1, "invalid", 5},
+		{0, "", 0},
+		{0, "10", 0},
+		{3, "", 3},
+		{3, "10", 3},
+		{15, "0", 15},
+	}
+	for _, tc := range tests {
+		got := resolveTimeout(tc.cli, tc.env)
+		if got != tc.want {
+			t.Errorf("resolveTimeout(%d, %q) = %d; want %d", tc.cli, tc.env, got, tc.want)
+		}
+	}
+}
+
+func TestParseXdshArgsTimeout(t *testing.T) {
+	opts := &xdshOptions{timeout: -1}
+	_, err := parseXdshArgs([]string{"-t", "0", "uptime"}, opts)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if opts.timeout != 0 {
+		t.Errorf("expected opts.timeout=0, got %d", opts.timeout)
+	}
+
+	opts = &xdshOptions{timeout: -1}
+	_, err = parseXdshArgs([]string{"--timeout", "10", "uptime"}, opts)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if opts.timeout != 10 {
+		t.Errorf("expected opts.timeout=10, got %d", opts.timeout)
+	}
+}
+
+func TestAddFailed(t *testing.T) {
+	var failed []string
+	addFailed(&failed, "node1")
+	addFailed(&failed, "node2")
+	addFailed(&failed, "node1")
+	if len(failed) != 2 {
+		t.Errorf("expected 2 unique failed nodes, got %d: %v", len(failed), failed)
+	}
+}
+
