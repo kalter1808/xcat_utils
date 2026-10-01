@@ -137,6 +137,12 @@ func parseXdshArgs(args []string, opts *xdshOptions) ([]string, error) {
 			opts.nodestatus = true
 		case a == "--sudo":
 			opts.sudo = true
+		case a == "--no-separator" || a == "--no-sep" || a == "--noseparator":
+			if hasVal {
+				opts.noSeparator = isTruthy(val)
+			} else {
+				opts.noSeparator = true
+			}
 		case strings.HasPrefix(a, "-"):
 			return nil, fmt.Errorf("unknown option %s", a)
 		default:

@@ -161,3 +161,57 @@ func TestAddFailed(t *testing.T) {
 	}
 }
 
+func TestParseXdshArgsNoSeparator(t *testing.T) {
+	flags := []string{"--no-separator", "--no-sep", "--noseparator"}
+	for _, f := range flags {
+		opts := &xdshOptions{}
+		rest, err := parseXdshArgs([]string{f, "uptime"}, opts)
+		if err != nil {
+			t.Fatalf("unexpected error for %s: %v", f, err)
+		}
+		if !opts.noSeparator {
+			t.Errorf("expected noSeparator=true for %s", f)
+		}
+		if len(rest) != 1 || rest[0] != "uptime" {
+			t.Errorf("expected rest=[uptime], got %v", rest)
+		}
+	}
+
+	opts := &xdshOptions{}
+	_, err := parseXdshArgs([]string{"--no-separator=false", "uptime"}, opts)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if opts.noSeparator {
+		t.Errorf("expected noSeparator=false for --no-separator=false")
+	}
+
+	opts = &xdshOptions{}
+	_, err = parseXdshArgs([]string{"--no-separator=1", "uptime"}, opts)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !opts.noSeparator {
+		t.Errorf("expected noSeparator=true for --no-separator=1")
+	}
+}
+
+func TestXdshEnvNoSeparator(t *testing.T) {
+	os.Setenv("XDSH_NO_SEPARATOR", "1")
+	defer os.Unsetenv("XDSH_NO_SEPARATOR")
+
+	opts := &xdshOptions{}
+	noSeparator := opts.noSeparator
+	if !noSeparator {
+		if v := os.Getenv("XDSH_NO_SEPARATOR"); v != "" {
+			noSeparator = isTruthy(v)
+		} else if v := os.Getenv("DSH_NO_SEPARATOR"); v != "" {
+			noSeparator = isTruthy(v)
+		}
+	}
+	if !noSeparator {
+		t.Errorf("expected noSeparator=true from XDSH_NO_SEPARATOR")
+	}
+}
+
+

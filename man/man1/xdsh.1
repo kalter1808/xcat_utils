@@ -5,6 +5,7 @@ xdsh \- parallel distributed shell execution for cluster nodes
 .B xdsh
 \fInoderange\fR
 [\fB\-k\fR|\fB\-\-ignore\-host\-key\fR]
+[\fB\-\-no\-separator\fR]
 [\fB\-l\fR \fIuser\fR]
 [\fB\-f\fR \fIfanout\fR]
 [\fB\-t\fR \fItimeout\fR]
@@ -38,8 +39,10 @@ Each line of stdout and stderr is prefixed with the corresponding node name:
 .fi
 .PP
 By default, output is buffered per node (printing stdout first, then stderr)
-and printed in batches sorted by node name. Real-time streaming mode can be
-enabled with \fB\-s\fR.
+and printed in batches sorted by node name. When targeting multiple hosts,
+outputs from different nodes are separated by a blank line for readability.
+This can be suppressed using \fB\-\-no\-separator\fR.
+Real-time streaming mode can be enabled with \fB\-s\fR.
 .PP
 Remote command return codes are accurately captured via an injected marker
 line (\fB:DSH_TARGET_RC=N:\fR) which is stripped from visible output.
@@ -60,6 +63,11 @@ Disable SSH host key verification. When specified, OpenSSH is invoked with:
 .IP
 This option also applies to remote script copy via \fBscp\fR(1) when \fB\-e\fR is used.
 Can also be enabled globally via the \fBXDSH_IGNORE_HOST_KEY\fR or \fBDSH_IGNORE_HOST_KEY\fR
+environment variables.
+.TP
+\fB\-\-no\-separator\fR, \fB\-\-no\-sep\fR, \fB\-\-noseparator\fR
+Do not print a blank line separator between outputs from different hosts.
+Can also be set via the \fBXDSH_NO_SEPARATOR\fR or \fBDSH_NO_SEPARATOR\fR
 environment variables.
 .TP
 \fB\-f\fR, \fB\-\-fanout\fR \fIfanout\fR
@@ -134,6 +142,10 @@ Do not expand the noderange argument (accepted for compatibility).
 .B XDSH_IGNORE_HOST_KEY, DSH_IGNORE_HOST_KEY
 When set to \fB1\fR, \fBtrue\fR, \fByes\fR, or \fBon\fR, enables \fB\-k\fR host key
 ignoring by default.
+.TP
+.B XDSH_NO_SEPARATOR, DSH_NO_SEPARATOR
+When set to \fB1\fR, \fBtrue\fR, \fByes\fR, or \fBon\fR, disables the blank line
+separator between outputs of different hosts.
 .TP
 .B DSH_FANOUT
 Default fanout value (concurrency level). Defaults to \fB64\fR.

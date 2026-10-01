@@ -39,7 +39,7 @@ const xdshUsage = " xdsh -h \n xdsh -q \n xdsh -V \n" +
 	"      [--devicetype type_of_device] [-f fanout]\n" +
 	"      [-l user_ID] [-L]  [-m] [-o options][-q] [-Q] [-r remote_shell]\n" +
 	"      [-i image path] [-s] [-S ksh | csh] [-t timeout]\n" +
-	"      [-T] [-X environment variables] [-v] [-z]\n" +
+	"      [-T] [-X environment variables] [-v] [-z] [--no-separator]\n" +
 	"      <command_list>\n"
 
 const dshVersion = "2.16.x (xcat-ports standalone)"
@@ -76,6 +76,7 @@ type xdshOptions struct {
 	ignoreEnv     string
 	rootsEnv      []string
 	ignoreHostKey bool
+	noSeparator   bool
 }
 
 func xdshMain(args []string) int {
@@ -200,6 +201,15 @@ func xdshMain(args []string) int {
 		}
 	}
 
+	noSeparator := opts.noSeparator
+	if !noSeparator {
+		if v := os.Getenv("XDSH_NO_SEPARATOR"); v != "" {
+			noSeparator = isTruthy(v)
+		} else if v := os.Getenv("DSH_NO_SEPARATOR"); v != "" {
+			noSeparator = isTruthy(v)
+		}
+	}
+
 	preCommand := buildPreCommand(opts)
 	postCommand := buildPostCommand(opts)
 
@@ -224,6 +234,7 @@ func xdshMain(args []string) int {
 		postCommand:   postCommand,
 		openSSH:       isOpenSSH(remoteShell),
 		ignoreHostKey: ignoreHostKey,
+		noSeparator:   noSeparator,
 	})
 }
 
@@ -385,6 +396,7 @@ type dshConfig struct {
 	postCommand   string
 	openSSH       bool
 	ignoreHostKey bool
+	noSeparator   bool
 }
 
 // targetResult captures a finished target.
@@ -398,12 +410,13 @@ type targetResult struct {
 }
 
 type runner struct {
-	cfg     *dshConfig
-	results chan *targetResult
-	sigCh   chan os.Signal
+	cfg         *dshConfig
+	results     chan *targetResult
+	sigCh       chan os.Signal
 	interrupted bool
-	mu      sync.Mutex
-	children map[string]*exec.Cmd
+	mu          sync.Mutex
+	children    map[string]*exec.Cmd
+	hasOutput   bool
 }
 
 // executeDsh mirrors fork_fanout_dsh + _execute_dsh: spawn up to fanout
@@ -567,8 +580,37 @@ func inFlight(wg *sync.WaitGroup) int {
 	return int(inFlightCounter.Load())
 }
 
+func (r *runner) hasContent(res *targetResult) bool {
+	cfg := r.cfg
+	if !cfg.silent && (len(res.stdout) > 0 || len(res.stderr) > 0) {
+		return true
+	}
+	if cfg.nodestatus {
+		return true
+	}
+	if cfg.monitor {
+		return true
+	}
+	if !res.rcSeen && !strings.HasSuffix(cfg.command, "&") {
+		return true
+	}
+	return false
+}
+
 func (r *runner) report(res *targetResult, failed *[]string) {
 	cfg := r.cfg
+
+	if !cfg.noSeparator && !cfg.streaming && r.hasContent(res) {
+		if r.hasOutput {
+			if len(res.stdout) > 0 || cfg.nodestatus || cfg.monitor {
+				fmt.Println()
+			} else {
+				fmt.Fprintln(os.Stderr)
+			}
+		}
+		r.hasOutput = true
+	}
+
 	// Default (buffered) mode: print the node's stdout then its stderr,
 	// each line labeled "node: " (buffer_output + _execute_dsh print loop).
 	if !cfg.silent {

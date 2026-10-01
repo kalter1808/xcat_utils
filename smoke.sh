@@ -47,9 +47,17 @@ exec /bin/sh -c "$cmd"
 EOSSH
 chmod +x /tmp/opencode/fakessh
 
-out=$($X node[1-2] -r /tmp/opencode/fakessh "echo hello" 2>&1 | sort)
+out=$($X -f 1 node[1-2] -r /tmp/opencode/fakessh "echo hello" 2>&1)
+expected=$'node1: hello\n\nnode2: hello'
+check "xdsh echo blank line separator" "$expected" "$out"
+
+out=$($X --no-separator node[1-2] -r /tmp/opencode/fakessh "echo hello" 2>&1 | sort)
 expected=$'node1: hello\nnode2: hello'
-check "xdsh echo via fake ssh" "$expected" "$out"
+check "xdsh --no-separator suppresses blank line" "$expected" "$out"
+
+out=$(XDSH_NO_SEPARATOR=1 $X node[1-2] -r /tmp/opencode/fakessh "echo hello" 2>&1 | sort)
+expected=$'node1: hello\nnode2: hello'
+check "XDSH_NO_SEPARATOR=1 suppresses blank line" "$expected" "$out"
 
 out=$($X node[1-2] -r /tmp/opencode/fakessh "exit 3" >/dev/null 2>&1; echo $?)
 check "xdsh exit code = failed count" "2" "$out"
@@ -74,7 +82,7 @@ check "xdsh --nodestatus fail" "node1: Remote_command_failed, error_code=1" "$ou
 out=$($X node7 -r /tmp/opencode/fakessh 'echo $NODE' 2>&1)
 check "xdsh exports NODE" "node7: node7" "$out"
 
-out=$($X node[1-8] -f 2 -r /tmp/opencode/fakessh "echo x" 2>&1 | sort | tr '\n' ' ')
+out=$($X --no-separator node[1-8] -f 2 -r /tmp/opencode/fakessh "echo x" 2>&1 | sort | tr '\n' ' ')
 expected8="node1: x node2: x node3: x node4: x node5: x node6: x node7: x node8: x "
 check "xdsh fanout 8 nodes" "$expected8" "$out"
 
@@ -100,7 +108,7 @@ out=$($X node[1-3] -t 1 -r /tmp/opencode/fakessh "sleep 30" >/dev/null 2>&1; ech
 elapsed=$(( $(date +%s) - start ))
 if [ "$elapsed" -lt 10 ]; then echo "PASS: xdsh timeout kills ($elapsed s, rc=$out)"; else echo "FAIL: xdsh timeout ($elapsed s)"; fail=1; fi
 
-out=$($X '192.168.100.[1-3]' -r /tmp/opencode/fakessh 'echo $NODE' 2>&1 | sort | tr '\n' ' ')
+out=$($X --no-separator '192.168.100.[1-3]' -r /tmp/opencode/fakessh 'echo $NODE' 2>&1 | sort | tr '\n' ' ')
 check "xdsh ip noderange" "192.168.100.1: 192.168.100.1 192.168.100.2: 192.168.100.2 192.168.100.3: 192.168.100.3 " "$out"
 
 # Host key verification ignore tests
