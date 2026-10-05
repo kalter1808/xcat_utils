@@ -1,18 +1,18 @@
-# xcat-ports: standalone pping и xdsh
+# xcat-ports: standalone pping, xdsh и xdcp
 
-Независимые порты утилит xCAT `/opt/xcat/bin/pping` и `/opt/xcat/bin/xdsh`
-на Go. Не требуют xcatd, xCAT-базы и Perl: noderange разворачивается локально,
-хосты разрешаются через DNS/hosts на этапе ssh/fping/nmap.
+Независимые порты утилит xCAT `/opt/xcat/bin/pping`, `/opt/xcat/bin/xdsh` и
+`/opt/xcat/bin/xdcp` на Go. Не требуют xcatd, xCAT-базы и Perl: noderange
+разворачивается локально, хосты разрешаются через DNS/hosts на этапе ssh/fping/nmap/rsync.
 
 ## Сборка (nix)
 
 ```sh
-nix build .#pping .#xdsh   # или .#default — оба бинарника сразу
-nix shell .#pping .#xdsh
-nix develop                # dev-shell с go, fping, nmap, openssh
+nix build .#pping .#xdsh .#xdcp   # или .#default — все бинарники сразу
+nix shell .#pping .#xdsh .#xdcp
+nix develop                       # dev-shell с go, fping, nmap, openssh, rsync
 ```
 
-Обычная сборка Go тоже работает: `go build ./cmd/pping ./cmd/xdsh`.
+Обычная сборка Go тоже работает: `go build ./cmd/pping ./cmd/xdsh ./cmd/xdcp`.
 
 ## pping
 
@@ -63,6 +63,25 @@ nix develop                # dev-shell с go, fping, nmap, openssh
 - предупреждения о неподдерживаемых переменных (DSH_LIST, WCOLL, ...) —
   как в `check_invalid_exports`
 
+## xdcp
+
+Параллельное копирование файлов на узлы или с узлов:
+
+- **Push-режим**: `xdcp noderange src... dst` — копирование локальных файлов/папок на удалённые узлы.
+- **Pull-режим** (`-P`): `xdcp noderange -P src dst_dir` — скачивание файла/папки с удалённых узлов
+  в локальную директорию с суффиксом имени узла (`dst_dir/file._<node>`).
+- **Synclist-режим** (`-F syncfile`): распределение файлов по правилам xCAT synclist:
+  `/path/src -> /path/dst` или `/path/src -> (node1,node2) /path/dst` с поддержкой glob (`*`, `?`).
+- **Image-режим** (`-i rootimg -F syncfile`): локальная синхронизация файлов в корень установочного образа OS.
+- выбор удалённой команды: по умолчанию **rsync** (если доступен), иначе **scp**; переопределение через `-r` / `DSH_NODE_RCP`.
+- `-p` — сохранение прав и меток времени (`scp -p`, `rsync -p -t`).
+- `-R` — рекурсивное копирование директорий.
+- `-k` / `--ignore-host-key` / `XDCP_IGNORE_HOST_KEY=1` (`XDSH_IGNORE_HOST_KEY=1`, `DSH_IGNORE_HOST_KEY=1`) —
+  отключение проверки host key.
+- `-f N` / `DSH_FANOUT` (по умолчанию **64**); `-t N` / `DSH_TIMEOUT` (по умолчанию **5** секунд, `0` — без таймаута).
+- `--no-separator` / `XDCP_NO_SEPARATOR=1` — отключение пустой строки-разделителя между выводами хостов.
+- `--sudo`, `--nodestatus`, `-m`, `-T`, `-z`, `-Q`, `-l user`.
+
 ## Noderange (полный синтаксис NodeRange.pm, без БД)
 
 - `node1,node2` — списки; результат сортирован и уникален
@@ -82,8 +101,8 @@ nix develop                # dev-shell с go, fping, nmap, openssh
 ## Тесты
 
 ```sh
-go test ./...     # unit-тесты noderange и xdsh
-bash smoke.sh     # smoke pping/xdsh (fake ssh для детерминированных проверок)
+go test ./...     # unit-тесты noderange, xdsh и xdcp
+bash smoke.sh     # smoke pping/xdsh/xdcp (fake ssh/scp для детерминированных проверок)
 nix flake check
 ```
 
@@ -92,6 +111,7 @@ nix flake check
 В проект включены man-страницы:
 - `man/man1/pping.1` (`man -l man/man1/pping.1`)
 - `man/man1/xdsh.1` (`man -l man/man1/xdsh.1`)
+- `man/man1/xdcp.1` (`man -l man/man1/xdcp.1`)
 
 При установке через Nix (`nix shell`, `nix profile install`) man-страницы подключаются автоматически в `share/man/man1/`.
 
@@ -99,5 +119,4 @@ nix flake check
 
 - нет xcatd/базы: группы узлов из `nodelist`, dyn-группы, `site.excludenodes`
   не работают — узлы и диапазоны задаются прямо в noderange/DNS
-- `-K` (раздача ключей), `-c`, `--devicetype`, `-i rootimg`, xdcp — вне
-  рамок порта
+- `-K` (раздача ключей), `-c`, `--devicetype` — вне рамок порта

@@ -6,8 +6,10 @@ GO=${GO:-go}
 mkdir -p /tmp/opencode
 $GO build -o /tmp/opencode/bin-pping ./cmd/pping
 $GO build -o /tmp/opencode/bin-xdsh ./cmd/xdsh
+$GO build -o /tmp/opencode/bin-xdcp ./cmd/xdcp
 P=/tmp/opencode/bin-pping
 X=/tmp/opencode/bin-xdsh
+C=/tmp/opencode/bin-xdcp
 
 fail=0
 check() { # name expected actual
@@ -146,5 +148,79 @@ check "xdsh XDSH_IGNORE_HOST_KEY env" "node1: HOSTKEY_IGNORED" "$out"
 
 out=$($X node1 -r /tmp/opencode/fakessh_k "echo hi" 2>&1 | grep "HOSTKEY_")
 check "xdsh default keeps host key check" "node1: HOSTKEY_CHECKED" "$out"
+
+# --- xdcp ---
+check "xdcp -h exit" "0" "$($C -h >/dev/null; echo $?)"
+$C -h | head -1 | grep -q " xdcp -h" && echo "PASS: xdcp -h text" || { echo "FAIL: xdcp -h text"; fail=1; }
+check "xdcp -V" "2.16.x (xcat-ports standalone)" "$($C -V)"
+$C -q | grep -q "Fanout Value: 64" && echo "PASS: xdcp -q" || { echo "FAIL: xdcp -q"; fail=1; }
+
+cat > /tmp/opencode/fakescp <<'EOSCP'
+#!/usr/bin/env bash
+echo "ARGS: $*"
+exit 0
+EOSCP
+chmod +x /tmp/opencode/fakescp
+
+out=$($C -f 1 node[1-2] -r /tmp/opencode/fakescp /etc/hosts /tmp/hosts 2>&1)
+expected=$'node1: ARGS: -o BatchMode=yes /etc/hosts node1:/tmp/hosts\n\nnode2: ARGS: -o BatchMode=yes /etc/hosts node2:/tmp/hosts'
+check "xdcp push blank line separator" "$expected" "$out"
+
+out=$($C --no-separator node[1-2] -r /tmp/opencode/fakescp /etc/hosts /tmp/hosts 2>&1 | sort)
+expected=$'node1: ARGS: -o BatchMode=yes /etc/hosts node1:/tmp/hosts\nnode2: ARGS: -o BatchMode=yes /etc/hosts node2:/tmp/hosts'
+check "xdcp --no-separator suppresses blank line" "$expected" "$out"
+
+# Pull mode test
+mkdir -p /tmp/opencode/pulled
+out=$($C -f 1 node[1-2] -P -r /tmp/opencode/fakescp /etc/hosts /tmp/opencode/pulled 2>&1)
+expected=$'node1: ARGS: -o BatchMode=yes node1:/etc/hosts /tmp/opencode/pulled/hosts._node1\n\nnode2: ARGS: -o BatchMode=yes node2:/etc/hosts /tmp/opencode/pulled/hosts._node2'
+check "xdcp pull target naming" "$expected" "$out"
+
+# Synclist mode test
+echo "/etc/hosts -> (node1) /tmp/hosts" > /tmp/opencode/synclist_test
+echo "/etc/resolv.conf -> /tmp/resolv.conf" >> /tmp/opencode/synclist_test
+out=$($C -f 1 node[1-2] -F /tmp/opencode/synclist_test -r /tmp/opencode/fakescp 2>&1 | grep "ARGS:" | wc -l)
+check "xdcp synclist node filter" "3" "$out"
+
+# Image mode test (-i)
+mkdir -p /tmp/opencode/rootimg
+echo "TESTDATA" > /tmp/opencode/imgsrc.txt
+echo "/tmp/opencode/imgsrc.txt -> /etc/test.conf" > /tmp/opencode/synclist_img
+$C -i /tmp/opencode/rootimg -F /tmp/opencode/synclist_img >/dev/null 2>&1
+img_content=$(cat /tmp/opencode/rootimg/etc/test.conf 2>/dev/null || echo "")
+check "xdcp -i image sync" "TESTDATA" "$img_content"
+
+# Host key ignore tests for xdcp
+cat > /tmp/opencode/fakescp_k <<'EOSCP'
+#!/usr/bin/env bash
+has_hostkey=0
+for arg in "$@"; do
+  if [ "$arg" = "StrictHostKeyChecking=no" ]; then
+    has_hostkey=1
+  fi
+done
+if [ "$has_hostkey" -eq 1 ]; then
+  echo "HOSTKEY_IGNORED"
+else
+  echo "HOSTKEY_CHECKED"
+fi
+exit 0
+EOSCP
+chmod +x /tmp/opencode/fakescp_k
+
+out=$($C node1 -k -r /tmp/opencode/fakescp_k /src /dst 2>&1 | grep "HOSTKEY_")
+check "xdcp -k ignores host key" "node1: HOSTKEY_IGNORED" "$out"
+
+out=$($C -k node1 -r /tmp/opencode/fakescp_k /src /dst 2>&1 | grep "HOSTKEY_")
+check "xdcp -k before noderange" "node1: HOSTKEY_IGNORED" "$out"
+
+out=$($C node1 --ignore-host-key -r /tmp/opencode/fakescp_k /src /dst 2>&1 | grep "HOSTKEY_")
+check "xdcp --ignore-host-key" "node1: HOSTKEY_IGNORED" "$out"
+
+out=$(XDCP_IGNORE_HOST_KEY=1 $C node1 -r /tmp/opencode/fakescp_k /src /dst 2>&1 | grep "HOSTKEY_")
+check "xdcp XDCP_IGNORE_HOST_KEY env" "node1: HOSTKEY_IGNORED" "$out"
+
+out=$($C node1 -r /tmp/opencode/fakescp_k /src /dst 2>&1 | grep "HOSTKEY_")
+check "xdcp default keeps host key check" "node1: HOSTKEY_CHECKED" "$out"
 
 exit $fail

@@ -1,0 +1,231 @@
+.TH XDCP 1 "October 2026" "xcat-ports 0.1.0" "User Commands"
+.SH NAME
+xdcp \- concurrently copy files to or from multiple cluster nodes
+.SH SYNOPSIS
+.B xdcp
+\fInoderange\fR
+[\fB\-k\fR|\fB\-\-ignore\-host\-key\fR]
+[\fB\-\-no\-separator\fR]
+[\fB\-l\fR \fIuser\fR]
+[\fB\-f\fR \fIfanout\fR]
+[\fB\-t\fR \fItimeout\fR]
+[\fB\-p\fR]
+[\fB\-P\fR]
+[\fB\-R\fR]
+[\fB\-r\fR \fIcommand\fR]
+[\fB\-o\fR \fIoptions\fR]
+[\fB\-\-sudo\fR]
+[\fB\-\-nodestatus\fR]
+[\fB\-m\fR]
+[\fB\-T\fR]
+[\fB\-z\fR]
+[\fB\-Q\fR]
+[\fB\-B\fR]
+[\fB\-h\fR]
+[\fB\-q\fR]
+[\fB\-V\fR]
+\fIsourcefile...\fR \fItargetpath\fR
+.PP
+.B xdcp
+\fInoderange\fR
+[\fB\-k\fR|\fB\-\-ignore\-host\-key\fR]
+[\fB\-\-no\-separator\fR]
+[\fB\-l\fR \fIuser\fR]
+[\fB\-f\fR \fIfanout\fR]
+[\fB\-t\fR \fItimeout\fR]
+[\fB\-r\fR \fIcommand\fR]
+[\fB\-o\fR \fIoptions\fR]
+[\fB\-\-sudo\fR]
+[\fB\-\-nodestatus\fR]
+[\fB\-m\fR]
+[\fB\-T\fR]
+[\fB\-z\fR]
+[\fB\-Q\fR]
+\fB\-F\fR \fIsynclist_file\fR
+.PP
+.B xdcp
+[\fB\-i\fR \fIinstall_image\fR]
+\fB\-F\fR \fIsynclist_file\fR
+[\fB\-o\fR \fIoptions\fR]
+[\fB\-T\fR]
+.PP
+.B xdcp
+[\fB\-h\fR|\fB\-V\fR|\fB\-q\fR]
+.SH DESCRIPTION
+.B xdcp
+is a standalone port of xCAT's \fBxdcp\fR utility running in bypass mode
+(without requiring the \fBxcatd\fR daemon or an xCAT database). It resolves
+the target \fInoderange\fR locally and copies files in parallel across all
+matching nodes using \fBrsync\fR(1) or OpenSSH \fBscp\fR(1).
+.PP
+.B xdcp
+supports four primary operating modes:
+.IP \(bu 2
+\fBPush Mode\fR (default): Copies one or more local files or directories to each target node.
+If multiple source files are specified, \fItargetpath\fR is treated as a remote directory.
+.IP \(bu 2
+\fBPull Mode\fR (\fB\-P\fR): Pulls a file or directory from each remote node into a local directory \fItargetpath\fR.
+To distinguish files from different nodes, the remote node's name is appended to the filename as
+\fB\fIfilename\fR._\fItarget\fR\fR.
+.IP \(bu 2
+\fBSynclist Mode\fR (\fB\-F\fR): Distributes files according to mappings specified in a synclist file.
+Supports optional per-line node filter ranges.
+.IP \(bu 2
+\fBImage Mode\fR (\fB\-i\fR): Synchronizes files directly into a local operating system installation root directory.
+.PP
+Output from each node is buffered and prefixed with \fB\fInode\fR: \fR.
+When copying across multiple nodes, outputs from different hosts are separated by an empty line
+for readability (can be suppressed with \fB\-\-no\-separator\fR).
+.SH OPTIONS
+.TP
+\fB\-k\fR, \fB\-\-ignore\-host\-key\fR, \fB\-\-ignore\-hostkey\fR, \fB\-\-insecure\fR, \fB\-\-no\-host\-key\-check\fR
+Disable SSH host key verification for underlying \fBssh\fR, \fBscp\fR, and \fBrsync\fR commands.
+Configures:
+.RS
+.IP \(bu 2
+\fB\-o StrictHostKeyChecking=no\fR (accept unknown host keys automatically)
+.IP \(bu 2
+\fB\-o UserKnownHostsFile=/dev/null\fR (ignore user known_hosts file)
+.IP \(bu 2
+\fB\-o GlobalKnownHostsFile=/dev/null\fR (ignore system known_hosts file)
+.IP \(bu 2
+\fB\-o LogLevel=ERROR\fR (suppress host key warnings on stderr)
+.RE
+.IP
+Can also be enabled globally via the \fBXDCP_IGNORE_HOST_KEY\fR, \fBXDSH_IGNORE_HOST_KEY\fR, or \fBDSH_IGNORE_HOST_KEY\fR environment variables.
+.TP
+\fB\-\-no\-separator\fR, \fB\-\-no\-sep\fR, \fB\-\-noseparator\fR
+Do not print an empty line separator between outputs from different hosts.
+Can also be set via the \fBXDCP_NO_SEPARATOR\fR, \fBXDSH_NO_SEPARATOR\fR, or \fBDSH_NO_SEPARATOR\fR environment variables.
+.TP
+\fB\-P\fR, \fB\-\-pull\fR
+Pulls files from the remote targets and places them into the local directory \fItargetpath\fR.
+The target path must be an existing directory on the local host.
+Only a single source file or directory (with \fB\-R\fR) can be specified.
+The copied file or directory is saved as \fB\fItargetpath\fR/\fIbasename\fR._\fItarget\fR\fR.
+.TP
+\fB\-F\fR, \fB\-\-File\fR \fIsynclist_file\fR
+Specifies the path to an xCAT synclist file defining file synchronization mappings.
+.TP
+\fB\-i\fR, \fB\-\-rootimg\fR \fIinstall_image\fR
+Specifies the path to a local Linux root image directory. When used with \fB\-F\fR,
+files are synchronized locally into \fIinstall_image\fR without executing remote commands.
+.TP
+\fB\-R\fR, \fB\-\-recursive\fR
+Recursively copy directories to the remote targets, or recursively pull directories with \fB\-P\fR.
+.TP
+\fB\-p\fR, \fB\-\-preserve\fR
+Preserve source file characteristics (permissions and modification timestamps).
+.TP
+\fB\-r\fR, \fB\-c\fR, \fB\-\-node\-rcp\fR \fIcommand\fR
+Path to the remote copy command (\fBrsync\fR or \fBscp\fR).
+If not specified, \fBrsync\fR is used by default if available in \fBPATH\fR; otherwise \fBscp\fR is used.
+.TP
+\fB\-f\fR, \fB\-\-fanout\fR \fIfanout\fR
+Maximum number of concurrent remote copy processes to run in parallel. Default is \fB64\fR (configurable via \fBDSH_FANOUT\fR).
+.TP
+\fB\-l\fR, \fB\-\-user\fR \fIuser\fR
+Remote login user ID. Defaults to current user (or \fBDSH_TO_USERID\fR).
+A \fIuser\fR@\fInoderange\fR prefix on the noderange argument is also supported.
+.TP
+\fB\-o\fR, \fB\-\-node\-options\fR \fIoptions\fR
+Additional options passed directly to the remote copy command.
+.TP
+\fB\-t\fR, \fB\-\-timeout\fR \fIseconds\fR
+Inactivity timeout in seconds (default \fB5\fR, \fB0\fR = unlimited).
+.TP
+\fB\-\-sudo\fR
+Executes remote copy commands with \fBsudo\fR privileges (using \fB\-\-rsync\-path='sudo rsync'\fR for rsync).
+.TP
+\fB\-\-nodestatus\fR
+Output a status line for each node: \fB\fInode\fR: Remote_copy_successful\fR or \fB\fInode\fR: Remote_copy_failed, error_code=\fIN\fR.
+.TP
+\fB\-m\fR, \fB\-\-monitor\fR
+Display progress messages as copy commands start and finish on each node.
+.TP
+\fB\-T\fR, \fB\-\-trace\fR
+Print diagnostic command invocations during execution.
+.TP
+\fB\-z\fR, \fB\-\-exit\-status\fR
+Print exit code summary for each node (\fB\fInode\fR: Remote_copy_rc = \fIN\fR).
+.TP
+\fB\-Q\fR, \fB\-\-silent\fR
+Silent mode. Suppress standard output and standard error from remote commands.
+.TP
+\fB\-B\fR, \fB\-\-bypass\fR
+Bypass mode (accepted for compatibility; this standalone port always runs in bypass mode).
+.TP
+\fB\-s\fR
+Sync service nodes flag (accepted for compatibility).
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Display command usage and exit.
+.TP
+\fB\-q\fR, \fB\-\-show\-config\fR
+Display configuration parameters and exit.
+.TP
+\fB\-V\fR, \fB\-\-version\fR
+Display version information and exit.
+.SH SYNCLIST FILE FORMAT
+A synclist file specifies source files on the local host and destination paths on target nodes:
+.IP
+.nf
+\fI/path/src_file1\fR \fB->\fR \fI/path/dst_file\fR
+\fI/path/src_file1\fR \fI/path/src_file2\fR \fB->\fR \fI/path/dst_dir/\fR
+\fI/path/src_dir/*\fR \fB->\fR \fI/path/dst_dir/\fR
+\fI/path/src_file\fR \fB->\fR (\fInoderange\fR) \fI/path/dst_file\fR
+.fi
+.PP
+Lines starting with \fB#\fR and blank lines are ignored.
+Wildcard patterns (\fB*\fR, \fB?\fR) in source paths are expanded on the local host.
+An optional target node filter \fB(\fInoderange\fB)\fR can restrict synchronization of specific lines to matching nodes.
+.SH ENVIRONMENT
+.TP
+.B XDCP_IGNORE_HOST_KEY, XDSH_IGNORE_HOST_KEY, DSH_IGNORE_HOST_KEY
+When set to \fB1\fR, \fBtrue\fR, \fByes\fR, or \fBon\fR, enables \fB\-k\fR host key ignoring by default.
+.TP
+.B XDCP_NO_SEPARATOR, XDSH_NO_SEPARATOR, DSH_NO_SEPARATOR
+When set to \fB1\fR, \fBtrue\fR, \fByes\fR, or \fBon\fR, disables the blank line separator between outputs of different hosts.
+.TP
+.B DSH_FANOUT
+Default fanout value (concurrency level). Defaults to \fB64\fR.
+.TP
+.B DSH_TIMEOUT
+Default command inactivity timeout in seconds (defaults to \fB5\fR; \fB0\fR disables timeout).
+.TP
+.B DSH_TO_USERID
+Default remote user ID if not specified via \fB\-l\fR.
+.TP
+.B DSH_NODE_RCP
+Default remote copy executable.
+.TP
+.B DSH_NODE_OPTS, DSH_REMOTE_OPTS
+Default options to pass to the remote copy command.
+.SH EXIT STATUS
+The exit status is equal to the number of failed target nodes (0 if all targets succeeded).
+.SH EXAMPLES
+.TP
+1. Copy \fB/etc/hosts\fR to all nodes in \fBnode[1-10]\fR:
+.B xdcp node[1-10] /etc/hosts /etc/hosts
+.TP
+2. Pull \fB/etc/hosts\fR from all nodes into local directory \fB/tmp/hosts.dir\fR:
+.B xdcp node[1-10] -P /etc/hosts /tmp/hosts.dir
+Each file is saved as \fB/tmp/hosts.dir/hosts._node1\fR, \fB/tmp/hosts.dir/hosts._node2\fR, etc.
+.TP
+3. Recursively pull directory \fB/var/log/app\fR from nodes into \fB/tmp/logs\fR:
+.B xdcp node[1-4] -RP /var/log/app /tmp/logs
+Saved as \fB/tmp/logs/app._node1\fR, \fB/tmp/logs/app._node2\fR, etc.
+.TP
+4. Sync files to compute nodes using a synclist file:
+.B xdcp compute -F /tmp/myrsync
+.TP
+5. Sync files directly into an OS installation root image:
+.B xdcp -i /install/netboot/fedora/rootimg -F /tmp/myrsync
+.TP
+6. Copy files with ignored host keys and custom rsync options:
+.B xdcp -k node[1-8] -o "-v --progress" /local/file /remote/file
+.SH SEE ALSO
+.BR xdsh (1),
+.BR pping (1),
+.BR rsync (1),
+.BR scp (1)
